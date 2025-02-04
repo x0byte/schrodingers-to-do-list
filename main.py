@@ -62,7 +62,7 @@ def view_tasks():
 
 # Update task status
 def set_state(task_id, state):
-    state_val = "done" if state == 1 else "not done"
+    state_val = "done" if state == 1 else "not-done"
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
