@@ -1,16 +1,54 @@
+import sqlite3
 from qiskit import QuantumCircuit
-from qiskit.primitives import StatevectorSampler
+from qiskit.quantum_info import Statevector
+import json
 
-def quantum_random_bit():
-    """Returns a truly random 0 or 1 using a quantum circuit."""
+conn = sqlite3.connect("todo-database.db")
+cursor = conn.cursor()
+
+create_table_query = '''
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    state TEXT
+);
+'''
+cursor.execute(create_table_query)
+conn.commit() 
+
+def get_quantum_state():
     qc = QuantumCircuit(1)
-    qc.h(0)  # Put the qubit in superposition
+    qc.h(0)
+    state = Statevector.from_instruction(qc)
+    
+    # Convert complex numbers to JSON-serializable format
+    state_data = [{"real": complex_num.real, "imag": complex_num.imag} 
+                 for complex_num in state.data]
+    return json.dumps(state_data)
 
-    sampler = StatevectorSampler()
-    job = sampler.run([qc])  # Wrap qc in a list
-    result = job.result()
-    probabilities = result.quasi_dists[0]  # Get probability distribution
+def add_task(name):
+    quantum_state = get_quantum_state()
+    
+    cursor.execute(
+        "INSERT INTO tasks (name, state) VALUES (?, ?)",
+        (name, quantum_state)
+    )
+    conn.commit()
+    return True
 
-    return max(probabilities, key=probabilities.get)  # Return the most probable outcome (0 or 1)
+def view_tasks():
+    cursor.execute("SELECT * FROM tasks")
+    tasks = cursor.fetchall()
+    
+    # Convert JSON strings back to complex numbers
+    for task in tasks:
+        task_id, name, state_json = task
+        state_data = json.loads(state_json)
+        complex_nums = [complex(item["real"], item["imag"]) for item in state_data]
+        print(f"Task {task_id}: {name} | Quantum state: {complex_nums}")
 
-print(quantum_random_bit())  # Output: 0 or 1
+# Test
+add_task("Wake up!")
+view_tasks()
+
+conn.close()
