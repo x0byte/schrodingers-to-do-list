@@ -5,6 +5,8 @@
 Welcome to the **Schrödinger's To-Do List**, where tasks exist in quantum superposition until you decide their fate. In a world full of rigid, binary checklists, this project dares to ask:  
 *"Is a task truly not done until the moment you finish it?"*  
 
+<img src="preview.gif" width=600>
+
 ## 🤔 Why This Exists  
 
 Traditional to-do lists assume tasks are either **done** ✅ or **not done** ❌. But reality is more uncertain than that. Inspired by **Schrödinger’s Cat**, this to-do list ensures that tasks exist in a probabilistic blur—both completed and uncompleted—until you, the user, collapse their state by checking them.  
