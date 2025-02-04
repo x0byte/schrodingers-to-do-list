@@ -2,71 +2,107 @@ import sqlite3
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector
 import json
+from flask import Flask, render_template, request, redirect
 
-conn = sqlite3.connect("todo-database.db")
-cursor = conn.cursor()
+app = Flask(__name__)
 
-create_table_query = '''
-CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY,
-    name TEXT,
-    state TEXT,
-    status TEXT
-);
-'''
-cursor.execute(create_table_query)
-conn.commit() 
+# Database setup
+def get_db_connection():
+    conn = sqlite3.connect("todo-database.db")
+    conn.row_factory = sqlite3.Row  
+    return conn
 
+# Initialize the database
+def init_db():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            state TEXT,
+            status TEXT
+        );
+    ''')
+    conn.commit()
+    conn.close()
+
+# Initialize the database 
+init_db()
+
+# getting Quantum state 
 def get_quantum_state():
     qc = QuantumCircuit(1)
     qc.h(0)
     state = Statevector.from_instruction(qc)
-    
-    # Convert complex numbers to JSON-serializable format
     state_data = [{"real": complex_num.real, "imag": complex_num.imag} 
-                 for complex_num in state.data]
+                  for complex_num in state.data]
     return json.dumps(state_data)
 
+# Add a task
 def add_task(name):
     quantum_state = get_quantum_state()
-    
+    conn = get_db_connection()
+    cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO tasks (name, state, status) VALUES (?, ?, ?)",
         (name, quantum_state, "superposition")
     )
     conn.commit()
-    return True
+    conn.close()
 
+# Fetch all tasks
 def view_tasks():
+    conn = get_db_connection()
+    cursor = conn.cursor()
     cursor.execute("SELECT * FROM tasks")
     tasks = cursor.fetchall()
-    
-    # Convert JSON strings back to complex numbers
-    for task in tasks:
-        task_id, name, state_json, status = task
-        state_data = json.loads(state_json)
-        complex_nums = [complex(item["real"], item["imag"]) for item in state_data]
-        print(f"Task {task_id}: {name} | Quantum state: {complex_nums} | Status: {status}")
+    conn.close()
+    return tasks
 
-def set_state(name, state):
-    # Validate state
-    if state not in (0, 1):
-        raise ValueError("State must be 0 (not done) or 1 (done)")
-    
+# Update task status
+def set_state(task_id, state):
     state_val = "done" if state == 1 else "not done"
-    
+    conn = get_db_connection()
+    cursor = conn.cursor()
     cursor.execute(
-        "UPDATE tasks SET status = ? WHERE name = ?",
-        (state_val, name)
+        "UPDATE tasks SET status = ? WHERE id = ?",
+        (state_val, task_id)
     )
-    
-    # Check if any rows were actually updated
-    if cursor.rowcount == 0:
-        print(f"No task found with name: {name}")
-        return False
-    
     conn.commit()
-    return True
+    conn.close()
 
+# Delete a task
+def delete_task(task_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+    conn.commit()
+    conn.close()
 
-conn.close()
+# Flask routes
+@app.route('/')
+def home():
+    tasks = view_tasks()
+    return render_template('index.html', tasks=tasks)
+
+@app.route('/add', methods=['POST'])
+def add_task_route():
+    task_name = request.form.get('task')
+    if task_name:
+        add_task(task_name)
+    return redirect('/')
+
+@app.route('/delete/<int:task_id>', methods=['POST'])
+def delete_task_route(task_id):
+    delete_task(task_id)
+    return redirect('/')
+
+@app.route('/update/<int:task_id>/<int:state>', methods=['POST'])
+def update_task_route(task_id, state):
+    set_state(task_id, state)
+    return redirect('/')
+
+# Run the app
+if __name__ == '__main__':
+    app.run(debug=True)
